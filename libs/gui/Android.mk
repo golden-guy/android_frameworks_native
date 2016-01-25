@@ -37,15 +37,17 @@ LOCAL_SRC_FILES:= \
 	SyncFeatures.cpp \
 
 LOCAL_SHARED_LIBRARIES := \
-	libbinder \
-	libcutils \
-	libEGL \
-	libGLESv2 \
 	libsync \
 	libui \
 	libutils \
 	liblog
 
+
+LOCAL_SHARED_LIBRARIES += \
+	libbinder \
+	libcutils \
+	libEGL \
+	libGLESv2
 
 LOCAL_MODULE:= libgui
 

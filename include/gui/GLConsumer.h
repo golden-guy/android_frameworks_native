@@ -176,9 +176,6 @@ public:
     // getCurrentCrop returns the cropping rectangle of the current buffer.
     Rect getCurrentCrop() const;
 
-    // getDirtyRegion returns the dirty rect associated with the current buffer.
-    Rect getCurrentDirtyRect() const;
-
     // getCurrentTransform returns the transform of the current buffer.
     uint32_t getCurrentTransform() const;
 
@@ -371,10 +368,6 @@ private:
     // mCurrentCrop is the crop rectangle that applies to the current texture.
     // It gets set each time updateTexImage is called.
     Rect mCurrentCrop;
-
-    //mCurrentDirtyRect is the dirty rectangle associated with the current
-    //buffer.
-    Rect mCurrentDirtyRect;
 
     // mCurrentTransform is the transform identifier for the current texture. It
     // gets set each time updateTexImage is called.

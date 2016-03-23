@@ -50,13 +50,9 @@ public:
         data.writeInt32(h);
         data.writeInt32(format);
         data.writeInt32(usage);
-        status_t result = remote()->transact(CREATE_GRAPHIC_BUFFER, data, &reply);
-        if(result != NO_ERROR){
-            *error = result;
-            return NULL;
-        }
+        remote()->transact(CREATE_GRAPHIC_BUFFER, data, &reply);
         sp<GraphicBuffer> graphicBuffer;
-        result = reply.readInt32();
+        status_t result = reply.readInt32();
         if (result == NO_ERROR) {
             graphicBuffer = new GraphicBuffer();
             result = reply.read(*graphicBuffer);

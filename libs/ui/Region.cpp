@@ -800,9 +800,7 @@ SharedBuffer const* Region::getSharedBuffer(size_t* count) const {
         size_t numRects = isRect() ? 1 : mStorage.size() - 1;
         count[0] = numRects;
     }
-    if (sb != NULL) {
-       sb->acquire();
-    }
+    sb->acquire();
     return sb;
 }
 

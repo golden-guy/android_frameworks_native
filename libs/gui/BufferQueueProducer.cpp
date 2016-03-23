@@ -517,14 +517,12 @@ status_t BufferQueueProducer::queueBuffer(int slot,
     int64_t timestamp;
     bool isAutoTimestamp;
     Rect crop;
-    Rect dirtyRect;
     int scalingMode;
     uint32_t transform;
     uint32_t stickyTransform;
     bool async;
     sp<Fence> fence;
-
-    input.deflate(&timestamp, &isAutoTimestamp, &crop, &dirtyRect, &scalingMode, &transform,
+    input.deflate(&timestamp, &isAutoTimestamp, &crop, &scalingMode, &transform,
             &async, &fence, &stickyTransform);
 
     if (fence == NULL) {
@@ -605,7 +603,6 @@ status_t BufferQueueProducer::queueBuffer(int slot,
         item.mAcquireCalled = mSlots[slot].mAcquireCalled;
         item.mGraphicBuffer = mSlots[slot].mGraphicBuffer;
         item.mCrop = crop;
-        item.mDirtyRect = dirtyRect;
         item.mTransform = transform & ~NATIVE_WINDOW_TRANSFORM_INVERSE_DISPLAY;
         item.mTransformToDisplayInverse =
                 bool(transform & NATIVE_WINDOW_TRANSFORM_INVERSE_DISPLAY);

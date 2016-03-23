@@ -77,7 +77,6 @@
 
 #include "RenderEngine/RenderEngine.h"
 #include <cutils/compiler.h>
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
 #include <gralloc_priv.h>
 #endif
@@ -85,7 +84,6 @@
 #ifdef QCOM_BSP
 #include <display_config.h>
 #endif
-#endif /* QCOM_HARDWARE */
 
 #define DISPLAY_COUNT       1
 
@@ -132,12 +130,10 @@ const String16 sReadFramebuffer("android.permission.READ_FRAME_BUFFER");
 const String16 sDump("android.permission.DUMP");
 
 // ---------------------------------------------------------------------------
-#ifdef QCOM_HARDWARE
 // Initialize extendedMode to false
 #ifdef QCOM_BSP
 bool SurfaceFlinger::sExtendedMode = false;
 #endif
-#endif /* QCOM_HARDWARE */
 
 SurfaceFlinger::SurfaceFlinger()
     :   BnSurfaceComposer(),
@@ -160,9 +156,7 @@ SurfaceFlinger::SurfaceFlinger()
         mDebugInTransaction(0),
         mLastTransactionTime(0),
         mBootFinished(false),
-#ifdef QCOM_HARDWARE
         mGpuTileRenderEnable(false),
-#endif /* QCOM_HARDWARE */
         mPrimaryHWVsyncEnabled(false),
         mHWVsyncAvailable(false),
         mDaltonize(false),
@@ -187,7 +181,6 @@ SurfaceFlinger::SurfaceFlinger()
             mDebugDDMS = 0;
         }
     }
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
     mCanUseGpuTileRender = false;
     property_get("debug.sf.gpu_comp_tiling", value, "0");
@@ -200,7 +193,6 @@ SurfaceFlinger::SurfaceFlinger()
     mDisableExtAnimation = atoi(value) ? true : false;
 #endif
 
-#endif /* QCOM_HARDWARE */
     ALOGI_IF(mDebugRegion, "showupdates enabled");
     ALOGI_IF(mDebugDDMS, "DDMS debugging enabled");
 }
@@ -286,22 +278,13 @@ void SurfaceFlinger::destroyDisplay(const sp<IBinder>& display) {
     setTransactionFlags(eDisplayTransactionNeeded);
 }
 
-#ifndef QCOM_HARDWARE
-void SurfaceFlinger::createBuiltinDisplayLocked(DisplayDevice::DisplayType type) {
-#else /* QCOM_HARDWARE */
 void SurfaceFlinger::createBuiltinDisplayLocked(DisplayDevice::DisplayType type,
                                                 bool secure) {
-#endif /* QCOM_HARDWARE */
     ALOGW_IF(mBuiltinDisplays[type],
             "Overwriting display token for display type %d", type);
     mBuiltinDisplays[type] = new BBinder();
     DisplayDeviceState info(type);
-#ifndef QCOM_HARDWARE
-    // All non-virtual displays are currently considered secure.
-    info.isSecure = true;
-#else /* QCOM_HARDWARE */
     info.isSecure = secure;
-#endif /* QCOM_HARDWARE */
     mCurrentState.displays.add(mBuiltinDisplays[type], info);
 }
 
@@ -432,14 +415,12 @@ void SurfaceFlinger::init() {
     status_t err;
     Mutex::Autolock _l(mStateLock);
 
-#ifdef QCOM_HARDWARE
     /* Set the mask bit of the sigset to block the SIGPIPE signal */
     sigset_t sigMask;
     sigemptyset (&sigMask);
     sigaddset(&sigMask, SIGPIPE);
     sigprocmask(SIG_BLOCK, &sigMask, NULL);
 
-#endif /* QCOM_HARDWARE */
     // initialize EGL for the default display
     mEGLDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     eglInitialize(mEGLDisplay, NULL, NULL);
@@ -463,15 +444,9 @@ void SurfaceFlinger::init() {
         DisplayDevice::DisplayType type((DisplayDevice::DisplayType)i);
         // set-up the displays that are already connected
         if (mHwc->isConnected(i) || type==DisplayDevice::DISPLAY_PRIMARY) {
-#ifndef QCOM_HARDWARE
-            // All non-virtual displays are currently considered secure.
-            bool isSecure = true;
-            createBuiltinDisplayLocked(type);
-#else /* QCOM_HARDWARE */
             // query from hwc if the non-virtual display is secure.
             bool isSecure = mHwc->isSecure(i);;
             createBuiltinDisplayLocked(type, isSecure);
-#endif /* QCOM_HARDWARE */
             wp<IBinder> token = mBuiltinDisplays[i];
 
             sp<IGraphicBufferProducer> producer;
@@ -559,11 +534,7 @@ bool SurfaceFlinger::authenticateSurfaceTexture(
 
 status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
         Vector<DisplayInfo>* configs) {
-#ifndef QCOM_HARDWARE
-    if (configs == NULL) {
-#else /* QCOM_HARDWARE */
     if ((configs == NULL) || (display.get() == NULL)) {
-#endif /* QCOM_HARDWARE */
         return BAD_VALUE;
     }
 
@@ -667,13 +638,8 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
         info.presentationDeadline =
                 hwConfig.refresh - SF_VSYNC_EVENT_PHASE_OFFSET_NS + 1000000;
 
-#ifndef QCOM_HARDWARE
-        // All non-virtual displays are currently considered secure.
-        info.secure = true;
-#else /* QCOM_HARDWARE */
         // set secure info based on the hwcConfig
         info.secure = hwConfig.secure;
-#endif /* QCOM_HARDWARE */
 
         configs->push_back(info);
     }
@@ -714,15 +680,10 @@ void SurfaceFlinger::setActiveConfigInternal(const sp<DisplayDevice>& hw, int mo
         return;
     }
 
-#ifndef QCOM_HARDWARE
-    hw->setActiveConfig(mode);
-    getHwComposer().setActiveConfig(type, mode);
-#else /* QCOM_HARDWARE */
     status_t status = getHwComposer().setActiveConfig(type, mode);
     if (status == NO_ERROR) {
         hw->setActiveConfig(mode);
     }
-#endif /* QCOM_HARDWARE */
 }
 
 status_t SurfaceFlinger::setActiveConfig(const sp<IBinder>& display, int mode) {
@@ -891,17 +852,12 @@ void SurfaceFlinger::onHotplugReceived(int type, bool connected) {
     if (uint32_t(type) < DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES) {
         Mutex::Autolock _l(mStateLock);
         if (connected) {
-#ifndef QCOM_HARDWARE
-            createBuiltinDisplayLocked((DisplayDevice::DisplayType)type);
-#else /* QCOM_HARDWARE */
             // query from hwc if the connected display is secure
             bool secure = mHwc->isSecure(type);;
             createBuiltinDisplayLocked((DisplayDevice::DisplayType)type, secure);
-#endif /* QCOM_HARDWARE */
         } else {
             mCurrentState.displays.removeItem(mBuiltinDisplays[type]);
             mBuiltinDisplays[type].clear();
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
             // if extended_mode is set, and set mVisibleRegionsDirty
             // as we need to rebuildLayerStack
@@ -909,7 +865,6 @@ void SurfaceFlinger::onHotplugReceived(int type, bool connected) {
                 mVisibleRegionsDirty = true;
             }
 #endif
-#endif /* QCOM_HARDWARE */
         }
         setTransactionFlags(eDisplayTransactionNeeded);
 
@@ -962,7 +917,6 @@ bool SurfaceFlinger::handleMessageInvalidate() {
     return handlePageFlip();
 }
 
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
 /* Compute DirtyRegion, if DR optimization for GPU comp optimization
  * is ON & and no external device is connected.*/
@@ -973,63 +927,19 @@ void SurfaceFlinger::setUpTiledDr() {
     }
 }
 #endif
-#endif /* QCOM_HARDWARE */
 void SurfaceFlinger::handleMessageRefresh() {
     ATRACE_CALL();
     preComposition();
     rebuildLayerStacks();
     setUpHWComposer();
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
     setUpTiledDr();
 #endif
-#endif /* QCOM_HARDWARE */
     doDebugFlashRegions();
     doComposition();
     postComposition();
 }
 
-#ifndef QCOM_HARDWARE
-void SurfaceFlinger::doDebugFlashRegions()
-{
-    // is debugging enabled
-    if (CC_LIKELY(!mDebugRegion))
-        return;
-
-    const bool repaintEverything = mRepaintEverything;
-    for (size_t dpy=0 ; dpy<mDisplays.size() ; dpy++) {
-        const sp<DisplayDevice>& hw(mDisplays[dpy]);
-        if (hw->isDisplayOn()) {
-            // transform the dirty region into this screen's coordinate space
-            const Region dirtyRegion(hw->getDirtyRegion(repaintEverything));
-            if (!dirtyRegion.isEmpty()) {
-                // redraw the whole screen
-                doComposeSurfaces(hw, Region(hw->bounds()));
-
-                // and draw the dirty region
-                const int32_t height = hw->getHeight();
-                RenderEngine& engine(getRenderEngine());
-                engine.fillRegionWithColor(dirtyRegion, height, 1, 0, 1, 1);
-
-                hw->compositionComplete();
-                hw->swapBuffers(getHwComposer());
-            }
-        }
-    }
-
-    postFramebuffer();
-
-    if (mDebugRegion > 1) {
-        usleep(mDebugRegion * 1000);
-    }
-
-    HWComposer& hwc(getHwComposer());
-    if (hwc.initCheck() == NO_ERROR) {
-        status_t err = hwc.prepare();
-        ALOGE_IF(err, "HWComposer::prepare failed (%s)", strerror(-err));
-    }
-}
-#else
 void SurfaceFlinger::doDebugFlashRegions()
 {
     // is debugging enabled
@@ -1094,7 +1004,6 @@ void SurfaceFlinger::doDebugFlashRegions()
         ALOGE_IF(err, "HWComposer::prepare failed (%s)", strerror(-err));
     }
 }
-#endif
 
 void SurfaceFlinger::preComposition()
 {
@@ -1153,13 +1062,11 @@ void SurfaceFlinger::postComposition()
 }
 
 void SurfaceFlinger::rebuildLayerStacks() {
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
     char prop[PROPERTY_VALUE_MAX];
     property_get("sys.extended_mode", prop, "0");
     sExtendedMode = atoi(prop) ? true : false;
 #endif
-#endif /* QCOM_HARDWARE */
     // rebuild the visible layer list per screen
     if (CC_UNLIKELY(mVisibleRegionsDirty)) {
         ATRACE_CALL();
@@ -1174,36 +1081,20 @@ void SurfaceFlinger::rebuildLayerStacks() {
             const sp<DisplayDevice>& hw(mDisplays[dpy]);
             const Transform& tr(hw->getTransform());
             const Rect bounds(hw->getBounds());
-#ifdef QCOM_HARDWARE
             int dpyId = hw->getHwcDisplayId();
-#endif /* QCOM_HARDWARE */
             if (hw->isDisplayOn()) {
-#ifndef QCOM_HARDWARE
-                SurfaceFlinger::computeVisibleRegions(layers,
-#else /* QCOM_HARDWARE */
                 SurfaceFlinger::computeVisibleRegions(dpyId, layers,
-#endif /* QCOM_HARDWARE */
                         hw->getLayerStack(), dirtyRegion, opaqueRegion);
 
                 const size_t count = layers.size();
                 for (size_t i=0 ; i<count ; i++) {
                     const sp<Layer>& layer(layers[i]);
                     const Layer::State& s(layer->getDrawingState());
-#ifndef QCOM_HARDWARE
-                    if (s.layerStack == hw->getLayerStack()) {
-                        Region drawRegion(tr.transform(
-                                layer->visibleNonTransparentRegion));
-                        drawRegion.andSelf(bounds);
-                        if (!drawRegion.isEmpty()) {
-                            layersSortedByZ.add(layer);
-                        }
-#else /* QCOM_HARDWARE */
                     Region drawRegion(tr.transform(
                             layer->visibleNonTransparentRegion));
                     drawRegion.andSelf(bounds);
                     if (!drawRegion.isEmpty()) {
                         layersSortedByZ.add(layer);
-#endif /* QCOM_HARDWARE */
                     }
                 }
             }
@@ -1277,7 +1168,6 @@ void SurfaceFlinger::setUpHWComposer() {
             sp<const DisplayDevice> hw(mDisplays[dpy]);
             const int32_t id = hw->getHwcDisplayId();
             if (id >= 0) {
-#ifdef QCOM_HARDWARE
                 // Get the layers in the current drawying state
                 const LayerVector& layers(mDrawingState.layersSortedByZ);
 #ifdef QCOM_BSP
@@ -1303,7 +1193,6 @@ void SurfaceFlinger::setUpHWComposer() {
                     }
                 }
 #endif
-#endif /* QCOM_HARDWARE */
                 const Vector< sp<Layer> >& currentLayers(
                     hw->getVisibleLayersSortedByZ());
                 const size_t count = currentLayers.size();
@@ -1316,7 +1205,6 @@ void SurfaceFlinger::setUpHWComposer() {
                      */
                     const sp<Layer>& layer(currentLayers[i]);
                     layer->setPerFrameData(hw, *cur);
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
                     if(freezeSurfacePresent) {
                         // if freezeSurfacePresent, set ANIMATING flag
@@ -1335,7 +1223,6 @@ void SurfaceFlinger::setUpHWComposer() {
                         }
                     }
 #endif
-#endif /* QCOM_HARDWARE */
                 }
             }
         }
@@ -1473,7 +1360,6 @@ void SurfaceFlinger::handleTransaction(uint32_t transactionFlags)
     // here the transaction has been committed
 }
 
-#ifdef QCOM_HARDWARE
 void SurfaceFlinger::setVirtualDisplayData(
     int32_t hwcDisplayId,
     const sp<IGraphicBufferProducer>& sink)
@@ -1574,7 +1460,6 @@ void SurfaceFlinger::configureVirtualDisplay(int32_t &hwcDisplayId,
         }
     }
 }
-#endif /* QCOM_HARDWARE */
 
 void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
 {
@@ -1664,7 +1549,6 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                                 || (state.viewport != draw[i].viewport)
                                 || (state.frame != draw[i].frame))
                         {
-#if defined(QCOM_BSP) && defined(QCOM_HARDWARE)
                             int orient = state.orientation;
                             // Honor the orientation change after boot
                             // animation completes and make sure boot
@@ -1674,6 +1558,7 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                                         state.viewport, state.frame);
                                 orient = state.orientation;
                             }
+#ifdef QCOM_BSP
                             else{
                                 char property[PROPERTY_VALUE_MAX];
                                 int panelOrientation =
@@ -1695,15 +1580,6 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                                     state.frame.right, state.frame.bottom);
                             }
 #else
-                            // Honor the orientation change after boot
-                            // animation completes or the new orientation is
-                            // same as panel orientation..
-                            if(mBootFinished ||
-                               state.orientation == disp->getOrientation()) {
-                                disp->setProjection(state.orientation,
-                                        state.viewport, state.frame);
-                            }
-#endif
                         }
                         if (state.width != draw[i].width || state.height != draw[i].height) {
                             disp->setDisplaySize(state.width, state.height);
@@ -1731,35 +1607,9 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                         // they have external state (layer stack, projection,
                         // etc.) but no internal state (i.e. a DisplayDevice).
                         if (state.surface != NULL) {
-#ifndef QCOM_HARDWARE
-
-                            int width = 0;
-                            int status = state.surface->query(
-                                    NATIVE_WINDOW_WIDTH, &width);
-                            ALOGE_IF(status != NO_ERROR,
-                                    "Unable to query width (%d)", status);
-                            int height = 0;
-                            status = state.surface->query(
-                                    NATIVE_WINDOW_HEIGHT, &height);
-                            ALOGE_IF(status != NO_ERROR,
-                                    "Unable to query height (%d)", status);
-                            if (MAX_VIRTUAL_DISPLAY_DIMENSION == 0 ||
-                                    (width <= MAX_VIRTUAL_DISPLAY_DIMENSION &&
-                                     height <= MAX_VIRTUAL_DISPLAY_DIMENSION)) {
-                                hwcDisplayId = allocateHwcDisplayId(state.type);
-                            }
-
-                            sp<VirtualDisplaySurface> vds = new VirtualDisplaySurface(
-                                    *mHwc, hwcDisplayId, state.surface,
-                                    bqProducer, bqConsumer, state.displayName);
-
-                            dispSurface = vds;
-                            producer = vds;
-#else /* QCOM_HARDWARE */
                             configureVirtualDisplay(hwcDisplayId,
                                     dispSurface, producer, state, bqProducer,
                                     bqConsumer);
-#endif /* QCOM_HARDWARE */
                         }
                     } else {
                         ALOGE_IF(state.surface!=NULL,
@@ -1775,11 +1625,7 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                     }
 
                     const wp<IBinder>& display(curr.keyAt(i));
-#ifndef QCOM_HARDWARE
-                    if (dispSurface != NULL) {
-#else /* QCOM_HARDWARE */
                     if (dispSurface != NULL && producer != NULL) {
-#endif /* QCOM_HARDWARE */
                         sp<DisplayDevice> hw = new DisplayDevice(this,
                                 state.type, hwcDisplayId,
                                 mHwc->getFormat(hwcDisplayId), state.isSecure,
@@ -1789,7 +1635,6 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                         hw->setProjection(state.orientation,
                                 state.viewport, state.frame);
                         hw->setDisplayName(state.displayName);
-#ifdef QCOM_HARDWARE
                         // When a new display device is added update the active
                         // config by querying HWC otherwise the default config
                         // (config 0) will be used.
@@ -1797,7 +1642,6 @@ void SurfaceFlinger::handleTransactionLocked(uint32_t transactionFlags)
                         if (activeConfig >= 0) {
                             hw->setActiveConfig(activeConfig);
                         }
-#endif /* QCOM_HARDWARE */
                         mDisplays.add(display, hw);
                         if (state.isVirtualDisplay()) {
                             if (hwcDisplayId >= 0) {
@@ -1956,11 +1800,7 @@ void SurfaceFlinger::commitTransaction()
     mTransactionCV.broadcast();
 }
 
-#ifndef QCOM_HARDWARE
-void SurfaceFlinger::computeVisibleRegions(
-#else /* QCOM_HARDWARE */
 void SurfaceFlinger::computeVisibleRegions(size_t dpy,
-#endif /* QCOM_HARDWARE */
         const LayerVector& currentLayers, uint32_t layerStack,
         Region& outDirtyRegion, Region& outOpaqueRegion)
 {
@@ -1971,14 +1811,9 @@ void SurfaceFlinger::computeVisibleRegions(size_t dpy,
     Region dirty;
 
     outDirtyRegion.clear();
-#ifndef QCOM_HARDWARE
-
-#else /* QCOM_HARDWARE */
     bool bIgnoreLayers = false;
     int indexLOI = -1;
-#endif /* QCOM_HARDWARE */
     size_t i = currentLayers.size();
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
     while (i--) {
         const sp<Layer>& layer = currentLayers[i];
@@ -2001,18 +1836,12 @@ void SurfaceFlinger::computeVisibleRegions(size_t dpy,
     }
     i = currentLayers.size();
 #endif
-#endif /* QCOM_HARDWARE */
     while (i--) {
         const sp<Layer>& layer = currentLayers[i];
 
         // start with the whole surface at its current location
         const Layer::State& s(layer->getDrawingState());
 
-#ifndef QCOM_HARDWARE
-        // only consider the layers on the given layer stack
-        if (s.layerStack != layerStack)
-            continue;
-#else /* QCOM_HARDWARE */
 #ifdef QCOM_BSP
         // Only add the layer marked as "external_only" or yuvLayer
         // (extended_mode) to external list and
@@ -2044,8 +1873,6 @@ void SurfaceFlinger::computeVisibleRegions(size_t dpy,
             layer->setVisibleNonTransparentRegion(visibleNonTransRegion);
             continue;
         }
-#endif /* QCOM_HARDWARE */
-
         /*
          * opaqueRegion: area of a surface that is fully opaque.
          */
@@ -2282,7 +2109,6 @@ void SurfaceFlinger::doDisplayComposition(const sp<const DisplayDevice>& hw,
     hw->swapBuffers(getHwComposer());
 }
 
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
 bool SurfaceFlinger::computeTiledDr(const sp<const DisplayDevice>& hw) {
     int fbWidth= hw->getWidth();
@@ -2301,7 +2127,6 @@ bool SurfaceFlinger::computeTiledDr(const sp<const DisplayDevice>& hw) {
 }
 #endif
 
-#endif /* QCOM_HARDWARE */
 bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const Region& dirty)
 {
     RenderEngine& engine(getRenderEngine());
@@ -2310,13 +2135,9 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
     HWComposer::LayerListIterator cur = hwc.begin(id);
     const HWComposer::LayerListIterator end = hwc.end(id);
 
-#ifdef QCOM_HARDWARE
     Region clearRegion;
-#endif /* QCOM_HARDWARE */
     bool hasGlesComposition = hwc.hasGlesComposition(id);
-#ifdef QCOM_HARDWARE
     const bool hasHwcComposition = hwc.hasHwcComposition(id);
-#endif /* QCOM_HARDWARE */
     if (hasGlesComposition) {
         if (!hw->makeCurrent(mEGLDisplay, mEGLContext)) {
             ALOGW("DisplayDevice::makeCurrent failed. Aborting surface composition for display %s",
@@ -2329,21 +2150,14 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         }
 
         // Never touch the framebuffer if we don't have any framebuffer layers
-#ifndef QCOM_HARDWARE
-        const bool hasHwcComposition = hwc.hasHwcComposition(id);
-#endif /* ! QCOM_HARDWARE */
         if (hasHwcComposition) {
             // when using overlays, we assume a fully transparent framebuffer
             // NOTE: we could reduce how much we need to clear, for instance
             // remove where there are opaque FB layers. however, on some
             // GPUs doing a "clean slate" clear might be more efficient.
             // We'll revisit later if needed.
-#ifndef QCOM_HARDWARE
-            engine.clearWithColor(0, 0, 0, 0);
-#else /* QCOM_HARDWARE */
             if(!(mGpuTileRenderEnable && (mDisplays.size()==1)))
                 engine.clearWithColor(0, 0, 0, 0);
-#endif /* QCOM_HARDWARE */
         } else {
             // we start with the whole screen area
             const Region bounds(hw->getBounds());
@@ -2359,15 +2173,8 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             // but limit it to the dirty region
             region.andSelf(dirty);
 
-#ifdef QCOM_HARDWARE
 
-#endif /* QCOM_HARDWARE */
             // screen is already cleared here
-#ifndef QCOM_HARDWARE
-            if (!region.isEmpty()) {
-                // can happen with SurfaceView
-                drawWormhole(hw, region);
-#else /* QCOM_HARDWARE */
 #ifdef QCOM_BSP
             clearRegion.clear();
             if(mGpuTileRenderEnable && (mDisplays.size()==1)) {
@@ -2391,7 +2198,6 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
                     } else
                         drawWormhole(hw, region);
                 }
-#endif /* QCOM_HARDWARE */
             }
         }
 
@@ -2423,7 +2229,6 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
     const Transform& tr = hw->getTransform();
     if (cur != end) {
         // we're using h/w composer
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
         int fbWidth= hw->getWidth();
         int fbHeight= hw->getHeight();
@@ -2465,7 +2270,6 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
         }
 #endif
 
-#endif /* QCOM_HARDWARE */
         for (size_t i=0 ; i<count && cur!=end ; ++i, ++cur) {
             const sp<Layer>& layer(layers[i]);
             const Region clip(dirty.intersect(tr.transform(layer->visibleRegion)));
@@ -2488,11 +2292,9 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
                         layer->draw(hw, clip);
                         break;
                     }
-#ifdef QCOM_HARDWARE
                     case HWC_BLIT:
                         //Do nothing
                         break;
-#endif /* QCOM_HARDWARE */
                     case HWC_FRAMEBUFFER_TARGET: {
                         // this should not happen as the iterator shouldn't
                         // let us get there.
@@ -2503,7 +2305,6 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             }
             layer->setAcquireFence(hw, *cur);
         }
-#ifdef QCOM_HARDWARE
 
 #ifdef QCOM_BSP
         // call EndTile, if starTile has been called in this cycle.
@@ -2513,7 +2314,6 @@ bool SurfaceFlinger::doComposeSurfaces(const sp<const DisplayDevice>& hw, const 
             }
         }
 #endif
-#endif /* QCOM_HARDWARE */
     } else {
         // we're not using h/w composer
         for (size_t i=0 ; i<count ; ++i) {
@@ -2585,7 +2385,6 @@ void SurfaceFlinger::setTransactionState(
         uint32_t flags)
 {
     ATRACE_CALL();
-#ifdef QCOM_HARDWARE
     size_t count = displays.size();
 #ifdef QCOM_BSP
     // Delay the display projection transaction by 50ms only when the disable
@@ -2609,7 +2408,6 @@ void SurfaceFlinger::setTransactionState(
         }
     }
 #endif
-#endif /* QCOM_HARDWARE */
     Mutex::Autolock _l(mStateLock);
     uint32_t transactionFlags = 0;
 
@@ -2629,9 +2427,6 @@ void SurfaceFlinger::setTransactionState(
         }
     }
 
-#ifndef QCOM_HARDWARE
-    size_t count = displays.size();
-#endif /* ! QCOM_HARDWARE */
     for (size_t i=0 ; i<count ; i++) {
         const DisplayState& s(displays[i]);
         transactionFlags |= setDisplayStateLocked(s);
@@ -2775,12 +2570,8 @@ uint32_t SurfaceFlinger::setClientStateLocked(
                 flags |= eTraversalNeeded;
         }
         if ((what & layer_state_t::eVisibilityChanged) ||
-#ifndef QCOM_HARDWARE
-                (what & layer_state_t::eOpacityChanged)) {
-#else /* QCOM_HARDWARE */
                 (what & layer_state_t::eOpacityChanged) ||
                 (what & layer_state_t::eTransparencyChanged)) {
-#endif /* QCOM_HARDWARE */
             // TODO: should we just use an eFlagsChanged for this?
             if (layer->setFlags(s.flags, s.mask))
                 flags |= eTraversalNeeded;
@@ -3780,14 +3571,12 @@ void SurfaceFlinger::renderScreenImplLocked(
     // make sure to clear all GL error flags
     engine.checkErrors();
 
-#ifdef QCOM_HARDWARE
     if (DisplayDevice::DISPLAY_PRIMARY == hw->getDisplayType() &&
                 hw->isPanelInverseMounted()) {
         rotation = (Transform::orientation_flags)
                 (rotation ^ Transform::ROT_180);
     }
 
-#endif /* QCOM_HARDWARE */
     // set-up our viewport
     engine.setViewportAndProjection(
         reqWidth, reqHeight, sourceCrop, hw_h, yswap, rotation);
@@ -3803,7 +3592,6 @@ void SurfaceFlinger::renderScreenImplLocked(
         const Layer::State& state(layer->getDrawingState());
         if (state.layerStack == hw->getLayerStack()) {
             if (state.z >= minLayerZ && state.z <= maxLayerZ) {
-#ifdef QCOM_HARDWARE
 #ifdef QCOM_BSP
                 // dont render the secure Display Layer
                 if(layer->isSecureDisplay()) {
@@ -3821,16 +3609,9 @@ void SurfaceFlinger::renderScreenImplLocked(
 #else
                 if (layer->isVisible()) {
 #endif
-#else /* QCOM_HARDWARE */
-                if (layer->isVisible()) {
-#endif /* QCOM_HARDWARE */
                     if (filtering) layer->setFiltering(true);
-#ifndef QCOM_HARDWARE
-                    layer->draw(hw, useIdentityTransform);
-#else /* QCOM_HARDWARE */
                     if(!layer->isProtected())
                            layer->draw(hw, useIdentityTransform);
-#endif /* QCOM_HARDWARE */
                     if (filtering) layer->setFiltering(false);
                 }
             }
@@ -3889,9 +3670,6 @@ status_t SurfaceFlinger::captureScreenImplLocked(
              */
             result = native_window_dequeue_buffer_and_wait(window,  &buffer);
             if (result == NO_ERROR) {
-#ifndef QCOM_HARDWARE
-                int syncFd = -1;
-#endif /* ! QCOM_HARDWARE */
                 // create an EGLImage from the buffer so we can later
                 // turn it into a texture
                 EGLImageKHR image = eglCreateImageKHR(mEGLDisplay, EGL_NO_CONTEXT,
@@ -3921,54 +3699,21 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                             sync = EGL_NO_SYNC_KHR;
                         }
                         if (sync != EGL_NO_SYNC_KHR) {
-#ifndef QCOM_HARDWARE
-                            // get the sync fd
-                            syncFd = eglDupNativeFenceFDANDROID(mEGLDisplay, sync);
-                            if (syncFd == EGL_NO_NATIVE_FENCE_FD_ANDROID) {
-                                ALOGW("captureScreen: failed to dup sync khr object");
-                                syncFd = -1;
-                            }
-                            eglDestroySyncKHR(mEGLDisplay, sync);
-                        } else {
-                            // fallback path
-                            sync = eglCreateSyncKHR(mEGLDisplay, EGL_SYNC_FENCE_KHR, NULL);
-                            if (sync != EGL_NO_SYNC_KHR) {
-                                EGLint result = eglClientWaitSyncKHR(mEGLDisplay, sync,
-#else /* QCOM_HARDWARE */
                             EGLint result = eglClientWaitSyncKHR(mEGLDisplay, sync,
-#endif /* QCOM_HARDWARE */
                                     EGL_SYNC_FLUSH_COMMANDS_BIT_KHR, 2000000000 /*2 sec*/);
-#ifndef QCOM_HARDWARE
-                                EGLint eglErr = eglGetError();
-                                if (result == EGL_TIMEOUT_EXPIRED_KHR) {
-                                    ALOGW("captureScreen: fence wait timed out");
-                                } else {
-                                    ALOGW_IF(eglErr != EGL_SUCCESS,
-                                            "captureScreen: error waiting on EGL fence: %#x", eglErr);
-                                }
-                                eglDestroySyncKHR(mEGLDisplay, sync);
-#else /* QCOM_HARDWARE */
                             EGLint eglErr = eglGetError();
                             eglDestroySyncKHR(mEGLDisplay, sync);
                             if (result == EGL_TIMEOUT_EXPIRED_KHR) {
                                 ALOGW("captureScreen: fence wait timed out");
-#endif /* QCOM_HARDWARE */
                             } else {
-#ifndef QCOM_HARDWARE
-                                ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
-#else /* QCOM_HARDWARE */
                                 ALOGW_IF(eglErr != EGL_SUCCESS,
                                         "captureScreen: error waiting on EGL fence: %#x", eglErr);
-#endif /* QCOM_HARDWARE */
                             }
-#ifdef QCOM_HARDWARE
                         } else {
                             ALOGW("captureScreen: error creating EGL fence: %#x", eglGetError());
                             // not fatal
-#endif /* QCOM_HARDWARE */
                         }
 
-#ifndef QCOM_HARDWARE
                         if (useReadPixels) {
                             sp<GraphicBuffer> buf = static_cast<GraphicBuffer*>(buffer);
                             void* vaddr;
@@ -3977,7 +3722,6 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                                 buf->unlock();
                             }
                         }
-#endif /* QCOM_HARDWARE */
 
                         if (DEBUG_SCREENSHOTS) {
                             uint32_t* pixels = new uint32_t[reqWidth*reqHeight];
@@ -3996,12 +3740,7 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                 } else {
                     result = BAD_VALUE;
                 }
-#ifndef QCOM_HARDWARE
-                // queueBuffer takes ownership of syncFd
-                window->queueBuffer(window, buffer, syncFd);
-#else /* QCOM_HARDWARE */
                 window->queueBuffer(window, buffer, -1);
-#endif /* QCOM_HARDWARE */
             }
         } else {
             result = BAD_VALUE;

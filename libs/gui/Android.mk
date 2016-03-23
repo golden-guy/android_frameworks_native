@@ -46,7 +46,6 @@ LOCAL_SHARED_LIBRARIES := \
 	libutils \
 	liblog
 
-ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
 # Executed only on QCOM BSPs
 ifeq ($(TARGET_USES_QCOM_BSP),true)
 ifneq ($(TARGET_QCOM_DISPLAY_VARIANT),)
@@ -55,7 +54,6 @@ else
     LOCAL_C_INCLUDES        += hardware/qcom/display/libgralloc
 endif
     LOCAL_CFLAGS += -DQCOM_BSP
-endif
 endif
 
 LOCAL_MODULE:= libgui

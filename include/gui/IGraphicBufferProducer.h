@@ -281,7 +281,6 @@ public:
         : timestamp(timestamp), isAutoTimestamp(isAutoTimestamp), crop(crop),
           scalingMode(scalingMode), transform(transform), stickyTransform(sticky),
           async(async), fence(fence) { }
-#ifdef QCOM_HARDWARE
 
         inline QueueBufferInput(int64_t timestamp, bool isAutoTimestamp,
                 const Rect& crop, const Rect& dirtyRect, int scalingMode, uint32_t transform, bool async,
@@ -290,7 +289,6 @@ public:
           dirtyRect(dirtyRect),scalingMode(scalingMode), transform(transform), stickyTransform(sticky),
           async(async), fence(fence) { }
 
-#endif /* QCOM_HARDWARE */
         inline void deflate(int64_t* outTimestamp, bool* outIsAutoTimestamp,
                 Rect* outCrop, int* outScalingMode, uint32_t* outTransform,
                 bool* outAsync, sp<Fence>* outFence,
@@ -307,7 +305,6 @@ public:
             }
         }
 
-#ifdef QCOM_HARDWARE
         inline void deflate(int64_t* outTimestamp, bool* outIsAutoTimestamp,
                 Rect* outCrop, Rect* outDirtyRect, int* outScalingMode, uint32_t* outTransform,
                 bool* outAsync, sp<Fence>* outFence,
@@ -326,7 +323,6 @@ public:
         }
 
 
-#endif /* QCOM_HARDWARE */
         // Flattenable protocol
         size_t getFlattenedSize() const;
         size_t getFdCount() const;
@@ -337,9 +333,7 @@ public:
         int64_t timestamp;
         int isAutoTimestamp;
         Rect crop;
-#ifdef QCOM_HARDWARE
         Rect dirtyRect;
-#endif /* QCOM_HARDWARE */
         int scalingMode;
         uint32_t transform;
         uint32_t stickyTransform;

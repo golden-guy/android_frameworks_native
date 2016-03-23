@@ -58,11 +58,9 @@
 #define INDENT4 "        "
 #define INDENT5 "          "
 
-#ifdef QCOM_HARDWARE
 // Ultrasound device name.
 #define USF_DEVICE_NAME "usf_tsc"
 
-#endif /* QCOM_HARDWARE */
 namespace android {
 
 // --- Constants ---
@@ -2093,13 +2091,11 @@ void KeyboardInputMapper::process(const RawEvent* rawEvent) {
                 keyCode = AKEYCODE_UNKNOWN;
                 flags = 0;
             }
-#ifdef QCOM_HARDWARE
             InputDeviceIdentifier identifier = getEventHub()->getDeviceIdentifier(rawEvent->deviceId);
             if ((identifier.name == USF_DEVICE_NAME) && (scanCode == BTN_USF_HOVERING_CURSOR))
             {
                 break;
             }
-#endif /* QCOM_HARDWARE */
             processKey(rawEvent->when, rawEvent->value != 0, keyCode, scanCode, flags);
         }
         break;
@@ -2605,9 +2601,7 @@ void CursorInputMapper::fadePointer() {
 TouchInputMapper::TouchInputMapper(InputDevice* device) :
         InputMapper(device),
         mSource(0), mDeviceMode(DEVICE_MODE_DISABLED),
-#ifdef QCOM_HARDWARE
         mHasExternalHoveringCursorControl(false), mExternalHoveringCursorVisible(false),
-#endif /* QCOM_HARDWARE */
         mSurfaceWidth(-1), mSurfaceHeight(-1), mSurfaceLeft(0), mSurfaceTop(0),
         mSurfaceOrientation(DISPLAY_ORIENTATION_0) {
 }
@@ -2879,10 +2873,8 @@ void TouchInputMapper::configureParameters() {
                         && getDevice()->isExternal();
     }
 
-#ifdef QCOM_HARDWARE
     mHasExternalHoveringCursorControl = getDevice()->hasKey(BTN_USF_HOVERING_CURSOR);
 
-#endif /* QCOM_HARDWARE */
     // Initial downs on external touch devices should wake the device.
     // Normally we don't do this for internal touch screens to prevent them from waking
     // up in your pocket but you can enable it using the input device configuration.
@@ -3079,11 +3071,7 @@ void TouchInputMapper::configureSurface(nsecs_t when, bool* outResetNeeded) {
     }
 
     // Create pointer controller if needed.
-#ifndef QCOM_HARDWARE
-    if (mDeviceMode == DEVICE_MODE_POINTER ||
-#else /* QCOM_HARDWARE */
     if (mDeviceMode == DEVICE_MODE_POINTER || mHasExternalHoveringCursorControl ||
-#endif /* QCOM_HARDWARE */
             (mDeviceMode == DEVICE_MODE_DIRECT && mConfig.showTouches)) {
         if (mPointerController == NULL) {
             mPointerController = getPolicy()->obtainPointerController(getDeviceId());
@@ -3753,7 +3741,6 @@ void TouchInputMapper::process(const RawEvent* rawEvent) {
     if (rawEvent->type == EV_SYN && rawEvent->code == SYN_REPORT) {
         sync(rawEvent->when);
     }
-#ifdef QCOM_HARDWARE
     if (mHasExternalHoveringCursorControl && rawEvent->type == EV_KEY) {
         if (rawEvent->code == BTN_USF_HOVERING_CURSOR && mPointerController != NULL) {
             if (rawEvent->value) {
@@ -3768,7 +3755,6 @@ void TouchInputMapper::process(const RawEvent* rawEvent) {
             }
         }
     }
-#endif /* QCOM_HARDWARE */
 }
 
 void TouchInputMapper::sync(nsecs_t when) {
@@ -3898,7 +3884,6 @@ void TouchInputMapper::sync(nsecs_t when) {
                 mPointerController->setSpots(mCurrentCookedPointerData.pointerCoords,
                         mCurrentCookedPointerData.idToIndex,
                         mCurrentCookedPointerData.touchingIdBits);
-#ifdef QCOM_HARDWARE
             }
 
             if (mHasExternalHoveringCursorControl && mPointerController != NULL) {
@@ -3918,7 +3903,6 @@ void TouchInputMapper::sync(nsecs_t when) {
                         mPointerController->unfade(android::PointerControllerInterface::TRANSITION_IMMEDIATE);
                     }
                 }
-#endif /* QCOM_HARDWARE */
             }
 
             dispatchHoverExit(when, policyFlags);
